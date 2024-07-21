@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import time
 
 # Initialize the webcam
 cap = cv2.VideoCapture(1)
@@ -7,12 +8,19 @@ if not cap.isOpened():
     print("Error: Could not open webcam.")
     exit()
 
-# Load the video file
-video_path = 'vid1.mp4'  # Replace with your video file path
-video_cap = cv2.VideoCapture(video_path)
-if not video_cap.isOpened():
-    print("Error: Could not open video file.")
-    exit()
+# Define video paths
+video_paths = {
+    'low': 'vid1.mp4',  # Replace with your low-speed video file path
+    'high': 'vid2.mp4'  # Replace with your high-speed video file path
+}
+
+# Function to load a new video
+def load_video(video_path):
+    return cv2.VideoCapture(video_path)
+
+# Initialize video capture
+current_video = 'low'
+video_cap = load_video(video_paths[current_video])
 
 # Initialize variables to keep track of the previous frame and motion
 prev_frame = None
@@ -20,6 +28,8 @@ paused = False
 sensitivity = 20  # Initial sensitivity
 fps = video_cap.get(cv2.CAP_PROP_FPS)
 frame_delay = int(1000 / fps)  # Initial frame delay in milliseconds
+last_switch_time = time.time()
+switch_cooldown = 2  # Time in seconds before switching videos again
 
 def calculate_motion(frame1, frame2):
     # Compute the absolute difference between the two frames
@@ -59,6 +69,21 @@ while True:
         speed_factor = max(min(motion_level / 1000, 10), 0.1)  # Avoid division by zero and too low speed
         new_delay = int(frame_delay / speed_factor)
 
+        # Determine the video to play based on motion level
+        if motion_level > 10000:  # Adjust the threshold as needed
+            new_video = 'high'
+        else:
+            new_video = 'low'
+
+        # Check if enough time has passed since the last switch
+        if new_video != current_video and (time.time() - last_switch_time) > switch_cooldown:
+            current_video = new_video
+            video_cap.release()  # Release the current video capture
+            video_cap = load_video(video_paths[current_video])  # Load the new video
+            fps = video_cap.get(cv2.CAP_PROP_FPS)
+            frame_delay = int(1000 / fps)  # Update the frame delay
+            last_switch_time = time.time()  # Update the last switch time
+
         # Read the next frame from the video
         ret, video_frame = video_cap.read()
         if not ret:
@@ -67,13 +92,10 @@ while True:
             if not ret:
                 break
 
-        # Add BLACK text (0, 0, 0) to the video frame
-        # cv2.putText(video_frame, f'Motion Level: {motion_level:.2f}', (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2, cv2.LINE_AA)
-        # cv2.putText(video_frame, f'Motion Sensitivity: {sensitivity:.2f}', (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2, cv2.LINE_AA)
-        
-        # Add WHITE text (255, 255, 255) to the video frame
-        cv2.putText(video_frame, f'Motion Level: {motion_level:.2f}', (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
-        cv2.putText(video_frame, f'Motion Sensitivity: {sensitivity:.2f}', (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+        # Add the text to the video frame
+        cv2.putText(video_frame, f'Motion Level: {motion_level:.2f}', (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2, cv2.LINE_AA)
+        cv2.putText(video_frame, f'Motion Sensitivity: {sensitivity:.2f}', (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2, cv2.LINE_AA)
+
         # Display the video frame
         cv2.imshow('Motion-Controlled Video Playback', video_frame)
 
