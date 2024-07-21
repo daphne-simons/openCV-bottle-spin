@@ -67,7 +67,7 @@ while True:
             if not ret:
                 break
 
-        # Add the text to the video frame
+        # Add BLACK text (0, 0, 0) to the video frame
         cv2.putText(video_frame, f'Motion Level: {motion_level:.2f}', (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2, cv2.LINE_AA)
         cv2.putText(video_frame, f'Motion Sensitivity: {sensitivity:.2f}', (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2, cv2.LINE_AA)
 
