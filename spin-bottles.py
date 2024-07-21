@@ -1,6 +1,5 @@
 import cv2
 import numpy as np
-import time
 
 # Initialize the webcam
 cap = cv2.VideoCapture(1)
@@ -10,21 +9,17 @@ if not cap.isOpened():
 
 # Load the PNG image with transparency
 bottle_img = cv2.imread('heineken.png', cv2.IMREAD_UNCHANGED)
-duplicate_img = bottle_img.copy()  # Duplicate the original image
 
 # Load the Haar Cascade for face detection
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
-# Initialize variables to keep track of the previous frames and motion
+# Initialize variables to keep track of the previous frame and motion
 prev_frame = None
-prev_frame_left = None
-prev_frame_right = None
-motion_level_left = 0
-motion_level_right = 0
 paused = False
 sensitivity = 20  # Initial sensitivity
-cumulative_angle_left = 0  # Initialize the cumulative angle for the left image
-cumulative_angle_right = 0  # Initialize the cumulative angle for the right image
+cumulative_angles = []
+motion_levels = []
+face_positions = []
 
 def calculate_motion(frame1, frame2):
     # Compute the absolute difference between the two frames
@@ -87,51 +82,59 @@ while True:
 
         if prev_frame is None:
             prev_frame = gray
-            prev_frame_left = gray[:, :gray.shape[1] // 2]
-            prev_frame_right = gray[:, gray.shape[1] // 2:]
             continue
 
-        # Split the frame into left and right halves
-        gray_left = gray[:, :gray.shape[1] // 2]
-        gray_right = gray[:, gray.shape[1] // 2:]
+        # Detect faces in the frame
+        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
 
-        # Calculate the motion level and contours for each half
-        motion_level_left, contours_left = calculate_motion(prev_frame_left, gray_left)
-        motion_level_right, contours_right = calculate_motion(prev_frame_right, gray_right)
+        # Ensure the motion levels and angles lists are the same length as the number of faces detected
+        while len(cumulative_angles) < len(faces):
+            cumulative_angles.append(0)
+            motion_levels.append(0)
+            face_positions.append((0, 0))
 
-        prev_frame_left = gray_left
-        prev_frame_right = gray_right
+        while len(cumulative_angles) > len(faces):
+            cumulative_angles.pop()
+            motion_levels.pop()
+            face_positions.pop()
 
-        # Calculate the rotation speed for each image
-        speed_left = min(motion_level_left / 1000, 10)  # Adjust the speed factor as needed
-        speed_right = min(motion_level_right / 1000, 10)  # Adjust the speed factor as needed
+        for i, (x, y, w, h) in enumerate(faces):
+            face_positions[i] = (x, y)
 
-        angle_increment_left = speed_left * 2  # Adjust this value to slow down the rotation
-        angle_increment_right = speed_right * 2  # Adjust this value to slow down the rotation
+            # Calculate motion in the region of the detected face
+            face_region = gray[y:y + h, x:x + w]
+            prev_face_region = prev_frame[y:y + h, x:x + w]
 
-        # Update the cumulative angles
-        cumulative_angle_left = (cumulative_angle_left + angle_increment_left) % 360
-        cumulative_angle_right = (cumulative_angle_right + angle_increment_right) % 360
+            if prev_face_region.size == 0 or face_region.size == 0:
+                continue
 
-        # Rotate the PNG images
-        rotated_bottle_left = rotate_image(bottle_img, cumulative_angle_left)
-        rotated_bottle_right = rotate_image(duplicate_img, cumulative_angle_right)
+            motion_level, _ = calculate_motion(prev_face_region, face_region)
+            motion_levels[i] = motion_level
 
-        # Get the positions to overlay the images
-        x_pos_left = (frame.shape[1] // 4) - (rotated_bottle_left.shape[1] // 2)
-        y_pos_left = (frame.shape[0] - rotated_bottle_left.shape[0]) // 2
+            # Calculate the rotation speed for each face region
+            speed = min(motion_level / 1000, 10)
+            angle_increment = speed * 2  # Adjust this value to slow down the rotation
 
-        x_pos_right = (3 * frame.shape[1] // 4) - (rotated_bottle_right.shape[1] // 2)
-        y_pos_right = (frame.shape[0] - rotated_bottle_right.shape[0]) // 2
+            # Update the cumulative angle
+            cumulative_angles[i] = (cumulative_angles[i] + angle_increment) % 360
 
-        # Overlay the rotated images on the frame
-        overlay_image_alpha(frame, rotated_bottle_left, x_pos_left, y_pos_left)
-        overlay_image_alpha(frame, rotated_bottle_right, x_pos_right, y_pos_right)
+        prev_frame = gray
 
-    # Show the frame with the overlay, speed text, and sensitivity text
-    cv2.putText(frame, f'Bottle Spinning Speed Left: {speed_left:.2f}', (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
-    cv2.putText(frame, f'Bottle Spinning Speed Right: {speed_right:.2f}', (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
-    cv2.putText(frame, f'Motion Sensitivity: {sensitivity:.2f}', (50, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+        # Rotate and overlay each bottle image for each detected face
+        for i, (x, y) in enumerate(face_positions):
+            rotated_bottle = rotate_image(bottle_img, cumulative_angles[i])
+
+            # Get the position to overlay the image
+            x_pos = x + w // 2 - rotated_bottle.shape[1] // 2
+            y_pos = y + h // 2 - rotated_bottle.shape[0] // 2
+
+            # Overlay the rotated image on the frame
+            overlay_image_alpha(frame, rotated_bottle, x_pos, y_pos)
+
+    # Show the frame with the overlay and speed text
+    for i, (x, y) in enumerate(face_positions):
+        cv2.putText(frame, f'Speed {i+1}: {motion_levels[i] / 1000:.2f}', (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
+    cv2.putText(frame, f'Motion Sensitivity: {sensitivity:.2f}', (50, frame.shape[0] - 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
     cv2.imshow('Motion-Based Spinning Bottle', frame)
 
     # Handle key presses
