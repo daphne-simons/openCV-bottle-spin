@@ -2,5 +2,5 @@
 
 ## How to run: 
 
-- `python ./spin-bottle.py`
-
+- Single Bottle: `python ./spin-bottle.py`
+- Multiple Bottles: `python ./spin-bottles.py`
