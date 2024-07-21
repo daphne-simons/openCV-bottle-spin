@@ -1,4 +1,4 @@
-# openCV-bottle-spin
+# openCV-spin-the-bottle
 
 ## How to run: 
 
