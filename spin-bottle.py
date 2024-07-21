@@ -1,8 +1,12 @@
 import cv2
 import numpy as np
+import time
 
 # Initialize the webcam
 cap = cv2.VideoCapture(1)
+if not cap.isOpened():
+    print("Error: Could not open webcam.")
+    exit()
 
 # Load the PNG image with transparency
 bottle_img = cv2.imread('heineken.png', cv2.IMREAD_UNCHANGED)  # Make sure the path to your PNG file is correct
@@ -11,6 +15,9 @@ bottle_img = cv2.imread('heineken.png', cv2.IMREAD_UNCHANGED)  # Make sure the p
 prev_frame = None
 motion_level = 0
 paused = False
+sensitivity = 20  # Initial sensitivity
+start_time = time.time()
+cumulative_angle = 0  # Initialize the cumulative angle
 
 def calculate_motion(frame1, frame2):
     # Compute the absolute difference between the two frames
@@ -87,10 +94,13 @@ while True:
 
         # Calculate the rotation speed
         speed = min(motion_level / 1000, 10)  # Adjust the speed factor as needed
-        angle = speed * 10  # Example: the angle can be 10 times the speed
+        angle_increment = speed * 2  # Example: the angle can be 5 times the speed
+
+        # Update the cumulative angle
+        cumulative_angle = (cumulative_angle + angle_increment) % 360
 
         # Rotate the PNG image
-        rotated_bottle = rotate_image(bottle_img, angle)
+        rotated_bottle = rotate_image(bottle_img, cumulative_angle)
 
         # Get the position to overlay the image (e.g., center of the frame)
         x_pos = (frame.shape[1] - rotated_bottle.shape[1]) // 2
@@ -99,8 +109,14 @@ while True:
         # Overlay the rotated image on the frame
         overlay_image_alpha(frame, rotated_bottle, x_pos, y_pos)
 
+  # Calculate and display the frame rate
+    end_time = time.time()
+    fps = 1 / (end_time - start_time)
+    start_time = end_time
+
     # Show the frame with the overlay and speed text
     cv2.putText(frame, f'Bottle Spinning Speed: {speed:.2f}', (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+    # cv2.putText(frame, f'Motion Sensitivity: {sensitivity:.2f}', (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
     cv2.imshow('Motion-Based Spinning Bottle', frame)
 
     # Handle key presses
@@ -109,6 +125,10 @@ while True:
         break
     elif key == ord('p'):
         paused = not paused
+    elif key == ord('+'):
+        sensitivity = min(sensitivity + 5, 100)
+    elif key == ord('-'):
+        sensitivity = max(sensitivity - 5, 0)
 
 # Release the webcam and close the window
 cap.release()
