@@ -8,7 +8,7 @@ if not cap.isOpened():
     exit()
 
 # Load the video file
-video_path = 'vid1.mp4'  # Replace with your video file path
+video_path = 'bottle-vid.mp4'  # Replace with your video file path
 video_cap = cv2.VideoCapture(video_path)
 if not video_cap.isOpened():
     print("Error: Could not open video file.")
